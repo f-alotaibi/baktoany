@@ -69,6 +69,7 @@ baktoany <backup.bak> [options]
 | `--csv <dir>` | Directory path to export tables as individual CSV files |
 | `--create-tables` | Create tables in destination database if they do not exist (default: `true`) |
 | `--drop` | Drop existing tables in target database before creating them (default: `false`) |
+| `--include-empty` | Include empty tables (without data pages) when creating schema or exporting (default: `false`) |
 
 ---
 

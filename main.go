@@ -29,6 +29,7 @@ func run() error {
 		csvDir       = flag.String("csv", "", "Directory to write CSV files into")
 		createTables = flag.Bool("create-tables", true, "Create tables in the target database if they don't exist")
 		dropFirst    = flag.Bool("drop", false, "Drop existing tables before creating them")
+		includeEmpty = flag.Bool("include-empty", false, "Include empty tables (without data pages) when creating schema or exporting")
 	)
 	flag.Usage = usage
 	flag.Parse()
@@ -130,14 +131,17 @@ func run() error {
 			continue
 		}
 		if len(tbl.Partitions) == 0 {
-			fmt.Printf("  %-40s  (no data pages)\n", obj.Name)
-			continue
+			if !*includeEmpty {
+				fmt.Printf("  %-40s  (no data pages, skipped)\n", obj.Name)
+				continue
+			}
+			fmt.Printf("  %-40s  (no data pages, schema only)\n", obj.Name)
 		}
 		tables = append(tables, tbl)
 	}
 
 	if len(tables) == 0 {
-		return fmt.Errorf("no tables with data pages found")
+		return fmt.Errorf("no matching tables found (use --include-empty to include tables without data)")
 	}
 
 	opts := output.WriteOpts{
@@ -231,6 +235,7 @@ Table selection:
 Table creation:
   --create-tables      Create tables in target DB (default: true)
   --drop               Drop existing tables before creating (default: false)
+  --include-empty      Include empty tables (without data pages) (default: false)
 
 Examples:
   baktoany backup.bak --list

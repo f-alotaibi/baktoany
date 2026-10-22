@@ -302,19 +302,19 @@ func (t *MdfTable) ActiveColumns() []ColumnType {
 }
 
 // ReadBootDBName is a helper to read the database name from a binary page header offset.
-// Not used at runtime but useful for diagnostics.
+// readUTF16LE16 reads a UTF-16LE string from data[start:end], stopping at null or 0x2020 padding.
 func readUTF16LE16(data []byte, start, end int) string {
 	if end > len(data) {
-		return ""
+		end = len(data)
 	}
 	n := (end - start) / 2
 	runes := make([]rune, 0, n)
 	for i := start; i+1 < end; i += 2 {
-		r := rune(binary.LittleEndian.Uint16(data[i:]))
-		if r == 0 {
+		val := binary.LittleEndian.Uint16(data[i:])
+		if val == 0 || val == 0x2020 {
 			break
 		}
-		runes = append(runes, r)
+		runes = append(runes, rune(val))
 	}
-	return string(runes)
+	return strings.TrimSpace(string(runes))
 }
