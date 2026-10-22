@@ -24,8 +24,7 @@ func parseBootPage(page *RawPage) (*BootPage, error) {
 	}
 
 	// Database name: UTF-16LE at bytes 48–304
-	dbName := decodeUTF16LE(fd[48:304])
-	dbName = strings.TrimRight(dbName, "\x00")
+	dbName := readUTF16LE16(fd, 48, 304)
 
 	// FirstSysIndices pointer: bytes 512–518
 	pp := ParsePagePointer(fd[512:518])
@@ -64,12 +63,12 @@ func OpenDatabase(provider PageProvider) (*MdfDatabase, error) {
 	fmt.Printf("  Database: %s\n", db.Boot.DatabaseName)
 	fmt.Println("  Reading system tables...")
 
-	// Allocation units are on the FirstSysIndices page (local records only)
+	// Allocation units are on the FirstSysIndices page (traverse entire chain)
 	allocPage, err := provider.GetPage(db.Boot.FirstSysIndices)
 	if err != nil || allocPage == nil {
 		return nil, fmt.Errorf("cannot read alloc units page %v: %w", db.Boot.FirstSysIndices, err)
 	}
-	for _, rec := range allocPage.AllRecords(true) {
+	for _, rec := range allocPage.AllRecords(false) {
 		db.AllocUnits = append(db.AllocUnits, ParseSysAllocUnit(rec))
 	}
 	fmt.Printf("    %d allocation units\n", len(db.AllocUnits))

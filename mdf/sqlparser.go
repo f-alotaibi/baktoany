@@ -226,7 +226,7 @@ func decodeVarChar(data []byte) string {
 	return string(decoded)
 }
 
-// decodeUTF16LE decodes bytes as UTF-16 little-endian.
+// decodeUTF16LE decodes bytes as UTF-16 little-endian, stopping at the first null character.
 func decodeUTF16LE(data []byte) string {
 	if len(data) == 0 {
 		return ""
@@ -235,6 +235,9 @@ func decodeUTF16LE(data []byte) string {
 	runes := make([]rune, 0, n)
 	for i := 0; i+1 < len(data); i += 2 {
 		r := rune(binary.LittleEndian.Uint16(data[i:]))
+		if r == 0 {
+			break
+		}
 		runes = append(runes, r)
 	}
 	return string(runes)
