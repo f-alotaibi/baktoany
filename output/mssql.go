@@ -169,7 +169,7 @@ func sqlValueToMSSQL(v *mdf.SqlValue, typ mdf.SqlType) any {
 	if v == nil {
 		return nil
 	}
-	switch v.Kind {
+	switch typ.Kind {
 	case mdf.SqlTinyInt:
 		return uint8(v.IntVal)
 	case mdf.SqlSmallInt:
@@ -183,12 +183,18 @@ func sqlValueToMSSQL(v *mdf.SqlValue, typ mdf.SqlType) any {
 	case mdf.SqlBit:
 		return v.BoolVal
 	case mdf.SqlDateTime, mdf.SqlSmallDateTime:
-		return v.TimeVal
+		if !v.TimeVal.IsZero() {
+			return v.TimeVal
+		}
+		return nil
 	case mdf.SqlUniqueIdentifier:
 		return v.StrVal
 	case mdf.SqlVarChar, mdf.SqlChar, mdf.SqlNVarChar, mdf.SqlNChar, mdf.SqlSysName:
 		return strings.TrimRight(v.StrVal, "\x00")
 	default:
+		if len(v.StrVal) > 0 {
+			return strings.TrimRight(v.StrVal, "\x00")
+		}
 		return v.BlobVal
 	}
 }
