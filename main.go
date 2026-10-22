@@ -130,6 +130,9 @@ func run() error {
 			fmt.Fprintf(os.Stderr, "WARNING: cannot build table %s: %v\n", obj.Name, err)
 			continue
 		}
+		if len(tbl.ActiveColumns()) == 0 {
+			continue
+		}
 		if len(tbl.Partitions) == 0 {
 			if !*includeEmpty {
 				fmt.Printf("  %-40s  (no data pages, skipped)\n", obj.Name)

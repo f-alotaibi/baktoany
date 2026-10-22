@@ -61,9 +61,12 @@ func ParseFixed(typ SqlType, bp *BitParser, fixedData []byte, cursor *int) (*Sql
 		if *cursor+16 > len(fixedData) {
 			return nil, fmt.Errorf("out of bounds GUID")
 		}
-		b := fixedData[*cursor : *cursor+16]
+		raw := make([]byte, 16)
+		copy(raw, fixedData[*cursor:*cursor+16])
 		*cursor += 16
-		return sqlStr(SqlUniqueIdentifier, formatGUID(b)), nil
+		v := sqlStr(SqlUniqueIdentifier, formatGUID(raw))
+		v.BlobVal = raw
+		return v, nil
 
 	case SqlDateTime:
 		// 4 bytes time (1/300s ticks) + 4 bytes date (days since 1900-01-01)

@@ -58,9 +58,21 @@ func mssqlWriteTable(db *sql.DB, table *mdf.MdfTable, opts WriteOpts) error {
 		colNames[i] = c.Name
 	}
 
-	// Use go-mssqldb bulk copy (TDS BCP protocol)
-	stmt, err := db.Prepare(mssql.CopyIn(table.Name, mssql.BulkOptions{}, colNames...))
+	// Use a dedicated transaction for bulk copy so any errors cleanly roll back
+	// without leaving the connection in TDS bulk-insert mode.
+	tx, err := db.Begin()
 	if err != nil {
+		return fmt.Errorf("tx begin: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// Use go-mssqldb bulk copy (TDS BCP protocol)
+	escapedTable := "[" + mssqlEscapeIdent(table.Name) + "]"
+	stmt, err := tx.Prepare(mssql.CopyIn(escapedTable, mssql.BulkOptions{}, colNames...))
+	if err != nil {
+		_ = tx.Rollback()
 		// Fallback to batched INSERT if bulk copy isn't available
 		return mssqlWriteBatched(db, table, cols)
 	}
@@ -92,10 +104,14 @@ func mssqlWriteTable(db *sql.DB, table *mdf.MdfTable, opts WriteOpts) error {
 
 	// Finalise the bulk copy
 	if _, err := stmt.Exec(); err != nil {
+		_ = stmt.Close()
 		return fmt.Errorf("bulk finalize: %w", err)
 	}
 	if err := stmt.Close(); err != nil {
 		return fmt.Errorf("stmt close: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("tx commit: %w", err)
 	}
 
 	fmt.Printf("  %-40s %8d rows\n", table.Name, totalRows)
@@ -170,13 +186,9 @@ func sqlValueToMSSQL(v *mdf.SqlValue, typ mdf.SqlType) any {
 		return nil
 	}
 	switch typ.Kind {
-	case mdf.SqlTinyInt:
-		return uint8(v.IntVal)
-	case mdf.SqlSmallInt:
-		return int16(v.IntVal)
-	case mdf.SqlInt:
-		return int32(v.IntVal)
-	case mdf.SqlBigInt:
+	case mdf.SqlTinyInt, mdf.SqlSmallInt, mdf.SqlInt, mdf.SqlBigInt:
+		// go-mssqldb bulk copy expects int64, int, or int32; passing int16 or uint8
+		// triggers "mssql: invalid type for int column".
 		return v.IntVal
 	case mdf.SqlFloat:
 		return v.FloatVal
@@ -188,6 +200,14 @@ func sqlValueToMSSQL(v *mdf.SqlValue, typ mdf.SqlType) any {
 		}
 		return nil
 	case mdf.SqlUniqueIdentifier:
+		if len(v.BlobVal) == 16 {
+			return v.BlobVal
+		}
+		// Fallback: parse GUID string back to bytes if BlobVal was not populated
+		var u mssql.UniqueIdentifier
+		if err := u.Scan(v.StrVal); err == nil {
+			return u[:]
+		}
 		return v.StrVal
 	case mdf.SqlVarChar, mdf.SqlChar, mdf.SqlNVarChar, mdf.SqlNChar, mdf.SqlSysName:
 		return strings.TrimRight(v.StrVal, "\x00")
